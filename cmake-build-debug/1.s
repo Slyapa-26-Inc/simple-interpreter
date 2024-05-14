@@ -1,0 +1,3 @@
+MOV B, A
+IN A
+ADD A, 2
