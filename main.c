@@ -66,6 +66,7 @@ void bigint_print(big_int *a)
 #define QUOT 6
 #define FINISH 10
 #define EOL 9
+#define INCR 11
 
  char token[80];
  int tok, token_type;
@@ -88,7 +89,7 @@ struct {
         "end", END,
         0, END
 };
-variables_list vartable = {NULL};
+hash_t *vartable;
 
 int internal_format(char *s);
 int get_token(void);
@@ -102,6 +103,7 @@ void factor_mul(int *result);
 void power(int *result);
 void unary(int *result);
 void braces_expr(int *result);
+void inc_dec(int *result);
 void get_primitive(int *result);
 void putback(void);
 void assign();
@@ -148,7 +150,14 @@ int get_token(void)
     if (strchr("+-*/%^=,;<>()", *prog)) {
         *tmp = *prog;
         prog++; tmp++;
+        if (((*(tmp-1) == '-' || *(tmp-1) == '+') && strchr("+-", *prog)) || (*prog == '=')) {
+            *tmp = *prog;
+            prog++; tmp++;
+        }
         *tmp = 0;
+        if (strcmp("--", token) == 0 || strcmp("++", token) == 0) {
+            tok = INCR;
+        }
         return (token_type = DELIM);
     }
     if (*prog == '"') {
@@ -189,12 +198,14 @@ int find_var(char *name)
         perror("wrong var name");
         exit(1);
     }
-    for (var_table_node *t = vartable.top; t != NULL; t = t->next) {
-        if (strcmp(t->var.name, name) == 0)
-            return t->var.val;
+    int tmp;
+    if (ht_get(vartable, name, &tmp) == 0)
+        return tmp;
+    else {
+        perror("No such variable");
+        exit(1);
     }
-    perror("No such variable");
-    exit(1);
+
 }
 
 void arith(char op, int *res, int *hold)
@@ -247,7 +258,7 @@ void term_sum(int *result)
     char op;
     int hold;
     factor_mul(result);
-    while ((op = *token) == '+' || op == '-') {
+    while ((op = *token) == '+' || op == '-' && tok != INCR) {
         get_token();
         factor_mul(&hold);
         arith(op, result, &hold);
@@ -280,7 +291,7 @@ void power(int *result)
 void unary(int *result)
 {
     char op = 0;
-    if ((token_type == DELIM) && *token == '-' || *token == '+') {
+    if ((token_type == DELIM && tok != INCR) && (*token == '-' || *token == '+')) {
         op = *token;
         get_token();
     }
@@ -300,8 +311,44 @@ void braces_expr(int *result)
             perror("Wrong Brace Expression");
         }
         get_token();
-    } else
+    } else {
+        inc_dec(result);
+        //get_primitive(result);
+    }
+
+}
+
+void inc_dec(int *result)
+{
+    if (token_type == DELIM && tok == INCR) {
+
+        int op = 0;
+        if (strcmp(token, "++") == 0)
+            op = 1;
+        if (strcmp(token, "--") == 0)
+            op = -1;
+        get_token();
+        if (token_type != VAR) {
+            perror("Only VARs incrementable");
+            return;
+        }
+        if (op == 0) {
+            perror("Only ++ or --");
+            return;
+        }
+        printf("Increment operation\n");
+        char *name = strdup(token);
+
         get_primitive(result);
+        *result += op;
+        ht_rewrite(vartable, name, *result);
+        free(name);
+
+
+    } else {
+        get_primitive(result);
+    }
+
 }
 
 void get_primitive(int *result)
@@ -330,21 +377,39 @@ void assign(void)
     }
     char *name = strdup(token);
     get_token();
-    if (*token != '=') {
-        perror("Supposed = symbol");
-        return;
-    }
+    char *operator = strdup(token);
     int value;
     calc_expression(&value);
-    for (var_table_node *t = vartable.top; t != NULL; t = t->next) {
-        if (strcmp(t->var.name, name) == 0) {
-            t->var.val = value;
-            free(name);
-            return;
+    if (*operator == '=') {
+        ht_append(vartable, name, value);
+        free(name);
+    } else if (operator[1] == '=') {
+        printf("%s\n", name);
+        int var = find_var(name);
+        switch (*operator) {
+            case '+':
+                var += value;
+                break;
+            case '-':
+                var -= value;
+                break;
+            case '*':
+                var *= value;
+                break;
+            case '/':
+                var /= value;
+                break;
+            case '%':
+                var %= value;
+                break;
         }
-    }
-    append_vartable(&vartable, name, value);
-    free(name);
+        if (ht_rewrite(vartable, name, var) == -1)
+            return;
+        free(name);
+        free(operator);
+    } else
+        perror("Assignment symbol expected");
+
 }
 
 long int filesize( FILE *fp )
@@ -378,23 +443,29 @@ char *load_program(char *filename)
 
 int main(int argc, char *argv[])
 {
-    char *program = load_program(argv[1]);
+    vartable = create_ht(200);
+
+    printf("started\n");
+    char *program = load_program("E:/Documents/main.slyap--");
+    printf("loaded!\n");
+
     if (!program) {
         perror("Error Loading file!");
         exit(1);
     }
+
     prog = program;
-    printf("program :: %s\n", prog);
+    printf("program ::\n %s\n", prog);
     get_token();
     while (*token) {
         printf("'%s', %d, %d\n", token, token_type, tok);
         get_token();
     }
-    /*append_vartable(&vartable, "slyapa", 2);
+    prog = program;
     assign();
     printf(">>> %d\n", find_var("a"));
     assign();
-    printf(">>> b = %d\n", find_var("b"));*/
+    printf(">>> a = %d", find_var("a"));
     free(program);
     return 0;
 }
