@@ -1,62 +1,14 @@
-/*#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <ctype.h>
-#include <stdint.h>*/
-/*
-#define BASE (100)
-#define MAXDIGITPOS (2) // base mlrd = 9; base 100 = 2
-
-typedef uint32_t bigintdigit;
-typedef struct biginteger {
-    bigintdigit *number;
-    size_t n;
-    long length;
-}big_int;
-
-big_int* bigint_create(const char *s)
-{
-    size_t n = strlen(s);
-    big_int *a = (big_int *) malloc(sizeof(big_int));
-    a->n = (size_t)round((n / (float)MAXDIGITPOS));
-    a->n = a->n ? a->n : 1;
-    a->number = (bigintdigit *) malloc(sizeof(bigintdigit) * a->n);
-    memset(a->number, 0, sizeof(bigintdigit) * a->n);
-    ssize_t i = n-1;
-    int powcnt = 0,
-        index = 0;
-    while (i >= 0)
-    {
-        a->number[index] += (s[i--] - '0') * (int)pow(10, powcnt++), a->length++;
-        if (powcnt >= MAXDIGITPOS)
-        {
-            powcnt = 0;
-            index++;
-        }
-
-    }
-    return a;
-}
-
-void bigint_print(big_int *a)
-{
-    for (int i = a->n-1; i >= 0 ; --i) {
-        printf("%d", a->number[i]);
-        if(a->number[i] == 0)
-            for (int j = 0; j < MAXDIGITPOS-1; ++j) {
-                printf("%d", 0);
-            }
-    }
-}
-
-*/
-
+/* *** COPYRIGHT SLYAPA26 INC. 2024 ***
+ * *** NOT FOR COPYING
+ * *** NOT FOR DISTRIBUTION
+ * *** ONLY FOR SLYAPA USE
+ * */
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include "variable_table.h"
+#include "hashtable.h"
+//#include "variable_table.h"
 
 #define DELIM 1
 #define VAR 2
@@ -67,6 +19,7 @@ void bigint_print(big_int *a)
 #define FINISH 10
 #define EOL 9
 #define INCR 11
+#define LABL 12
 
  char token[80];
  int tok, token_type;
@@ -89,7 +42,8 @@ struct {
         "end", END,
         0, END
 };
-hash_t *vartable;
+//hash_t *vartable;
+HT(char *, int) vartable;
 
 int internal_format(char *s);
 int get_token(void);
@@ -123,7 +77,7 @@ int internal_format(char *s)
     }
     for (int i = 0; *table[i].command; ++i) {
         if (strcmp(table[i].command, s) == 0)
-            return table[i].tok;
+              table[i].tok;
     }
     return 0;
 }
@@ -176,7 +130,7 @@ int get_token(void)
         return (token_type = NUM);
     }
     if (isalpha(*prog)) {
-        while(isalnum(*prog))
+        while(isalnum(*prog) || *prog == ':')
             *tmp++ = *prog++;
 
         token_type = STR;
@@ -184,8 +138,13 @@ int get_token(void)
     *tmp = '\0';
     if (token_type == STR) {
         tok = internal_format(token);
-        if (!tok)
-            token_type = VAR;
+        if (!tok) {
+            if (*(tmp-1) == ':')
+                token_type = LABL;
+            else
+                token_type = VAR;
+        }
+
         else
             token_type = COM;
     }
@@ -198,9 +157,13 @@ int find_var(char *name)
         perror("wrong var name");
         exit(1);
     }
-    int tmp;
-    if (ht_get(vartable, name, &tmp) == 0)
-        return tmp;
+    int res_ind;
+    // TOD0 DONE
+    /*if (ht_get(vartable, name, &tmp) == 0)
+        return tmp;*/
+    ht_get(vartable, name, res_ind, hash_f, str_eq);
+    if (res_ind != 0)
+        return ht_val(vartable, res_ind);
     else {
         perror("No such variable");
         exit(1);
@@ -341,7 +304,11 @@ void inc_dec(int *result)
 
         get_primitive(result);
         *result += op;
-        ht_rewrite(vartable, name, *result);
+        //TOD0:macro DONE
+        int elem_ind;
+        ht_get(vartable, name, elem_ind, hash_f, str_eq);
+        ht_val(vartable, elem_ind) = *result;
+//        ht_rewrite(vartable, name, *result);
         free(name);
 
 
@@ -381,8 +348,14 @@ void assign(void)
     int value;
     calc_expression(&value);
     if (*operator == '=') {
-        ht_append(vartable, name, value);
-        free(name);
+        //TOD0:macro DONE
+        int ind, absnt;
+        ht_append(vartable, char *, int, name, ind, absnt, hash_f, str_eq);
+        printf("{absnt - %s %d}\n", name, absnt);
+        if(absnt == 1 || absnt == 0)
+            ht_val(vartable, ind) = value;
+        //        ht_append(vartable, name, value);
+//        free(name); не надо, т.к. ета именно строка записывается в хеш-таблицу
     } else if (operator[1] == '=') {
         printf("%s\n", name);
         int var = find_var(name);
@@ -403,8 +376,17 @@ void assign(void)
                 var %= value;
                 break;
         }
-        if (ht_rewrite(vartable, name, var) == -1)
+        //TOD0:macro DONE
+        int ind;
+        ht_get(vartable, name, ind, hash_f, str_eq);
+        if (ind != 0) {
+            ht_val(vartable, ind) = var;
+        } else {
             return;
+        }
+        /*if (ht_rewrite(vartable, name, var) == -1)
+            return;*/
+
         free(name);
         free(operator);
     } else
@@ -443,7 +425,9 @@ char *load_program(char *filename)
 
 int main(int argc, char *argv[])
 {
-    vartable = create_ht(200);
+    //TOD0:macro DONE
+    ht_init(vartable);
+//    vartable = create_ht(200);
 
     printf("started\n");
     char *program = load_program("E:/Documents/main.slyap--");
@@ -466,6 +450,10 @@ int main(int argc, char *argv[])
     printf(">>> %d\n", find_var("a"));
     assign();
     printf(">>> a = %d", find_var("a"));
+    assign();
+    assign();
+    assign();
+    printf(">>> slyapa = %d", find_var("slyapa"));
     free(program);
     return 0;
 }

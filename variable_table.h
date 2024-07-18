@@ -24,6 +24,7 @@ void remove_by_name(variables_list *list, char *name);
 
 /* *** */
 
+/*
 typedef int data_t;
 
 typedef struct item {
@@ -45,5 +46,5 @@ void ht_remove(hash_t *ht, char *key);
 int ht_get(hash_t *ht, char *key, data_t *dest);
 int ht_rewrite(hash_t *ht, char *key, data_t new_val);
 void print_ht(hash_t *ht);
-
+*/
 #endif //UNTITLED3_VARIABLE_TABLE_H

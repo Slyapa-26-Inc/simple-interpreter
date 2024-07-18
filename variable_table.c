@@ -43,7 +43,7 @@ void remove_by_name(variables_list *list, char *name)
     }
 }
 */
-
+/*
 item *new_item(char *key, data_t val)
 {
     item *new = (item*) malloc(sizeof(item));
@@ -163,3 +163,4 @@ void print_ht(hash_t *ht)
 
     }
 }
+ */

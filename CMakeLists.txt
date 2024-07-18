@@ -5,4 +5,6 @@ set(CMAKE_C_STANDARD 11)
 
 add_executable(untitled3 main.c
         variable_table.c
-        variable_table.h)
+        variable_table.h
+        hashtable.h
+        hashtable.h)
